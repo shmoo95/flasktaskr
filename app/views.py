@@ -1,14 +1,19 @@
 #views.py
 
-from flask import Flask, flash, redirect, render_template, request, session, url_for, g
+from flask import Flask, flash, redirect, render_template, request, session, url_for
+from forms import AddTaskForm
 from functools import wraps
-import sqlite3
+from flask.ext.sqlalchemy import SQLAlchemy
+
+
+
 
 app = Flask(__name__)
 app.config.from_object('config')
+db = SQLAlchemy(app)
 
-def connect_db():
-	return sqlite.connect(app.config['DATABASE'])
+from models import Task 
+
 
 def login_required(test):
 	@wraps(test)
@@ -41,15 +46,51 @@ def login():
 @app.route('/tasks/')
 @login_required
 def tasks():
-	g.db = connect_db()
-	cur = g.db.execute('select name, due_date, priority, task_id from tasks where status=1')
-	open_tasks = [dict(name=row[0], due_date = row[1], priority = row[2], task_id = row[3]) for row in cur.fetchall()]
-	cur = g.db.execute('select name, due_date, priority, task_id from tasks where status=0')
-	closed_tasks = [dict(name=row[0], due_date=row[1], priority = row[2], task_id = row[3]) for row in cur.fetchall()]
-	g.db.close()
+	open_tasks = db.session.query(Task).filter_by(status='1').order_by(Task.due_date.asc())
+	closed_tasks = db.session.query(Task).filter_by(status='0').order_by(Task.due_date.asc())
 	return render_template(
 		'tasks.html',
 		form=AddTaskForm(request.form),
 		open_tasks=open_tasks,
 		closed_tasks=closed_tasks
 		)
+
+@app.route('/add/', methods=['POST'])
+@login_required
+def new_task():
+	form = AddTaskForm(request.form)
+	if request.method == 'POST':
+		
+		if form.validate_on_submit():
+			print "Got past validate"
+			new_task = Task(
+				form.name.data,
+				form.due_date.data,
+				form.priority.data,
+				'1')
+			
+			db.session.add(new_task)
+			db.session.commit()
+
+			flash('New entry was successfully posted. Thanks.')
+	return redirect(url_for('tasks'))
+
+#mark tasks as complete
+@app.route('/complete/<int:task_id>/')
+@login_required
+def complete(task_id):
+	new_id = task_id
+	db.session.query(Task).filter_by(task_id = new_id).update({"status": "0"})
+	db.session.commit()
+	flash('The task was marked as complete.')
+	return redirect(url_for('tasks'))
+
+@app.route('/delete/<int:task_id>/',)
+@login_required
+def delete_entry(task_id):
+	new_id = task_id
+	db.session.query(Task).filter_by(task_id=new_id).delete()
+	db.session.commit()
+	flash('The task was deleted. Why not add a new one?')
+	return redirect(url_for('tasks'))
+
