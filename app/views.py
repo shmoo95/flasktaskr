@@ -1,9 +1,10 @@
 #views.py
 
 from flask import Flask, flash, redirect, render_template, request, session, url_for
-from forms import AddTaskForm
 from functools import wraps
 from flask.ext.sqlalchemy import SQLAlchemy
+from forms import AddTaskForm, RegisterForm, LoginForm
+
 
 
 
@@ -12,7 +13,7 @@ app = Flask(__name__)
 app.config.from_object('config')
 db = SQLAlchemy(app)
 
-from models import Task 
+from models import Task, User
 
 
 def login_required(test):
@@ -33,15 +34,31 @@ def logout():
 
 @app.route('/', methods=['GET', 'POST'])
 def login():
+	error= None
+	form = LoginForm(request.form)
 	if request.method == 'POST':
-		if request.form['username'] != app.config['USERNAME'] or request.form['password'] != app.config['PASSWORD']:
-			error = 'Invalid Credentials. Please try again'
-			return render_template('login.html', error=error)
+		if form.validate_on_submit():
+			u = User.query.filter_by(
+				name=request.form['name'],
+				password=request.form['password']).first()
+			if u is None:
+				error = 'Invalid Username or password'
+				return render_template(
+					"login.html",
+					form=form,
+					error=error)
+			else:
+				session['logged_in'] = True
+				flash('You are logged in. Go Crazy')
+				return redirect(url_for('tasks'))
 		else:
-			session['logged_in'] = True
-			return redirect(url_for('tasks'))
+			return render_template(
+				"login.html",
+				form=form,
+				error=error
+				)
 	if request.method == 'GET':
-		return render_template('login.html')
+		return render_template('login.html', form=form)
 
 @app.route('/tasks/')
 @login_required
@@ -93,4 +110,29 @@ def delete_entry(task_id):
 	db.session.commit()
 	flash('The task was deleted. Why not add a new one?')
 	return redirect(url_for('tasks'))
+
+# User Registration
+@app.route('/register/', methods=['GET', 'POST'])
+def register():
+	print "GOt to Register"
+	error = None
+	form= RegisterForm(request.form)
+	if request.method == 'POST':
+		print "GOt to Post1"
+		if form.validate_on_submit():
+			print "GOt to Post"
+			new_user = User(
+				form.name.data,
+				form.email.data,
+				form.password.data,
+				)
+			print "GOt to Commit"
+			db.session.add(new_user)
+			db.session.commit()
+			flash('Thanks for registering. Please login')
+			return redirect(url_for('login'))
+		else:
+			return render_template('register.html', form=form, error=error)
+	if request.method == 'GET':
+		return render_template('register.html', form=form)
 
