@@ -29,7 +29,7 @@
         </p>
         <p>
           {{ form.priority.label}}
-          {{ form.priority }}
+          {{ form.priority(class="form-control", style="max-width:60px") }}
           <span class="error">
             {%if form.priority.errors %}
               {%for error in form.priority.errors%}
